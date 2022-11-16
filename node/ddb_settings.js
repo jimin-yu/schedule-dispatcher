@@ -1,3 +1,4 @@
+import minimist from 'minimist'
 import DynamoDBService from "./services/dynamodb_service.js";
 
 const ddbService = new DynamoDBService()
@@ -16,7 +17,11 @@ async function clearTableAndSeed(tableName, itemCount){
   createSampleSchedules(tableName, itemCount)
 }
 
-clearTableAndSeed('deali_schedules', 50)
+const argv = minimist(process.argv.slice(2));
+const tableName = argv['table-name']
+const itemCount = argv['item-count']
+
+clearTableAndSeed(tableName, itemCount)
 
 
 
