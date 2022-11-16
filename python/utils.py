@@ -1,7 +1,7 @@
 import random
 import time
 import uuid
-from schedule import Schedule
+from common import Schedule
 
 def make_sample_schedule(max_shard_id):
   sample = Schedule(
@@ -22,7 +22,6 @@ def make_sample_job_payload():
     'jobParams': random.sample(params, 1)
   }
 
-
 if __name__ == "__main__":
     sample_schedule = make_sample_schedule(5)
-    print(sample_schedule.job_spec)
+    print(str(sample_schedule))

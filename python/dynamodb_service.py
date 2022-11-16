@@ -1,73 +1,82 @@
 from utils import *
-from schedule import Schedule
+from common import Schedule, ScheduleQueryResponse
 import json
 import asyncio
 import aioboto3
-
-# from boto3.dynamodb.conditions import Key
-
-
-async def main():
-    session = aioboto3.Session()
-    async with session.resource('dynamodb', region_name='eu-central-1') as dynamo_resource:
-        table = await dynamo_resource.Table('test_table')
-
-        await table.put_item(
-            Item={'pk': 'test1', 'col1': 'some_data'}
-        )
-
-        result = await table.query(
-            KeyConditionExpression=Key('pk').eq('test1')
-        )
-
-        # Example batch write
-        more_items = [{'pk': 't2', 'col1': 'c1'}, \
-                      {'pk': 't3', 'col1': 'c3'}]
-        async with table.batch_writer() as batch:
-            for item_ in more_items:
-                await batch.put_item(Item=item_)
-
-# loop = asyncio.get_event_loop()
-# loop.run_until_complete(main())
-
-# Outputs:
-#  [{'col1': 'some_data', 'pk': 'test1'}]
-
+from boto3.dynamodb.conditions import Key
 
 class DynamoDBService:
-	def __init__(self):
-		self.shard_number = 10
-		self.query_limit = 5
-		self.table_name = 'deali_schedules_python'
-		self.session = aioboto3.Session()
-		self.ddb_client = self.session.resource('dynamodb', endpoint_url='http://localhost:8000')
+  def __init__(self):
+    self.shard_number = 10
+    self.query_limit = 5
+    self.table_name = 'deali_schedules_python'
+  
+  def _get_dynamodb_session(self):
+    session = aioboto3.Session()
+    return session.resource('dynamodb', endpoint_url='http://localhost:8000')
 
-	def _make_put_item_args(self, schedule: Schedule) -> dict:
-		return {
-			'TableName': self.table_name,
-			'Item': {
-				'shard_id': {'S': schedule.shard_id},
-				'date_token': {'S': schedule.date_token},
-				'job_status': {'S': schedule.job_status},
-				'job_spec': {'S':schedule.job_spec}
-			}
-		}
+  async def add_job(self) -> None:
+    schedule = make_sample_schedule(self.shard_number-1)
 
-	async def add_job(self):
-		schedule = make_sample_schedule(self.shard_number-1)
+    async with self._get_dynamodb_session() as ddb_client:
+      table = await ddb_client.Table(self.table_name)
 
-		async with self.ddb_client as ddb_client:
-			table = await ddb_client.Table(self.table_name)
+      await table.put_item(
+        Item={
+          'shard_id': str(schedule.shard_id),
+          'date_token': schedule.date_token,
+          'job_status': schedule.job_status,
+          'job_spec': json.dumps(schedule.job_spec)
+        }
+      )
 
-			await table.put_item(
-				Item={
-					'shard_id': str(schedule.shard_id),
-					'date_token': schedule.date_token,
-					'job_status': schedule.job_status,
-					'job_spec': json.dumps(schedule.job_spec)
-				}
-			)
-	
+  async def get_overdue_jobs(self, partition: int) -> ScheduleQueryResponse:
+    now = str(time.time() * 1000)
+    async with self._get_dynamodb_session() as ddb_client:
+      table = await ddb_client.Table(self.table_name)
+
+      response = await table.query(
+        KeyConditionExpression=Key('shard_id').eq(str(partition)) & Key('date_token').lt(now),
+        FilterExpression=Key('job_status').eq('SCHEDULED'),
+        Limit=self.query_limit
+      )
+    
+      return ScheduleQueryResponse(
+        [Schedule.decode_to_schedule(ddb_item) for ddb_item in response['Items']],
+        response['Count'] == self.query_limit or 'LastEvaluatedKey' in response
+      )
+
+  async def update_status(self, schedule, old_status, new_status):
+    async with self._get_dynamodb_session() as ddb_client:
+      table = await ddb_client.Table(self.table_name)
+
+      response = await table.update_item(
+        Key={
+          'shard_id': str(schedule.shard_id), 
+          'date_token': schedule.date_token
+        },
+        ConditionExpression='job_status = :oldStatus',
+        UpdateExpression='SET job_status = :newStatus',
+        ExpressionAttributeValues={
+          ':oldStatus': old_status,
+          ':newStatus': new_status
+        }
+      )
+      print(response)
+
+  async def delete_dispatched_job(self, schedulde):
+    pass
+
+
+
+
+
+async def test():
+  ddb_service = DynamoDBService()
+  result = await ddb_service.get_overdue_jobs(8)
+  schedule = result.schedules[0]
+  await ddb_service.update_status(schedule, 'SCHEDULED', 'ACQUIRED')
+
+
 if __name__ == "__main__":
-	ddb_service = DynamoDBService()
-	asyncio.run(ddb_service.add_job())
+  asyncio.run(test())
