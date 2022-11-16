@@ -13,13 +13,14 @@ import Schedule from '../common/schedule.js'
 import { v4 as uuidv4 } from 'uuid';
 
 class DynamoDBService {
-  constructor(){
+  constructor(metrics){
     this.maxShardId = 10
     this.queryLimit = 5
     this.tableName = 'deali_schedules'
     this.client = new DynamoDBClient({
       endpoint: 'http://localhost:8000'
     });
+    this.metrics = metrics
   }
 
   makePutItemCommand(tableName, schedule){
@@ -106,10 +107,12 @@ class DynamoDBService {
   }
 
   async getOverdueJobs(partition){
+    const start = Date.now()
     const command = this.makeOverdueJobsQueryCommand(partition, Date.now(), 'SCHEDULED');
     return this.client
     .send(command)
     .then((response)=>{
+      this.metrics.getOverdueJobs(Date.now()-start, partition)
       return {
         schedules: response.Items.map(this.decodeSchedule),
         shouldImmediatelyQueryAgain: response.Count == this.queryLimit || !!response.LastEvaluatedKey

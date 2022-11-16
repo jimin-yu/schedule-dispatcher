@@ -1,8 +1,10 @@
 import DynamoDBService from "../services/dynamodb_service.js"
+import Metrics from "../common/metrics.js";
 
 class Worker{
   constructor(){
-    this.ddbService = new DynamoDBService;
+    this.metrics = new Metrics
+    this.ddbService = new DynamoDBService(this.metrics);
     this.scanTimes = new Map;
   }
   // 서비스 SQS에 넣기
@@ -19,6 +21,7 @@ class Worker{
   }
 
   async dispatchOverdue(partition){
+    const start = Date.now()
     return new Promise((resolve, reject)=>{
       this.ddbService
       .getOverdueJobs(partition)
@@ -31,6 +34,7 @@ class Worker{
         Promise.all(promises)
         .then(()=>{
           console.log("all schedule dispatch promise done..")
+          this.metrics.dispatchOverdue(Date.now()-start, partition, schedules.length)
           resolve(shouldImmediatelyQueryAgain);
         })
       })
@@ -42,6 +46,7 @@ class Worker{
   }
 
   async scanGroup(partitions){
+    const start = Date.now()
     let noDelay = false;
 
     for(const partition of partitions){
@@ -61,7 +66,7 @@ class Worker{
       }
     }
     // TODO : post PartitionWorkerIterationEvent event
-    
+    this.metrics.scanGroup(Date.now()-start, partitions, noDelay)
     if(noDelay){
       // this.scanGroup(partitions) => stack overflow...
       setTimeout(()=>this.scanGroup(partitions), 0)
