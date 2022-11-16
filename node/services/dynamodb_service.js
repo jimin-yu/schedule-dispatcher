@@ -3,7 +3,10 @@ import {
   PutItemCommand, 
   UpdateItemCommand,
   DeleteItemCommand, 
-  QueryCommand 
+  QueryCommand,
+  ListTablesCommand,
+  DeleteTableCommand,
+  CreateTableCommand 
 } from "@aws-sdk/client-dynamodb";
 import { getRandomInt, makeSampleJobPayload } from '../common/utils.js'
 import Schedule from '../common/schedule.js'
@@ -13,15 +16,15 @@ class DynamoDBService {
   constructor(){
     this.maxShardId = 10
     this.queryLimit = 5
-    this.TableName = 'deali_schedules'
+    this.tableName = 'deali_schedules'
     this.client = new DynamoDBClient({
       endpoint: 'http://localhost:8000'
     });
   }
 
-  makePutItemCommand(schedule){
+  makePutItemCommand(tableName, schedule){
     const putItemRequest = {
-      TableName: this.TableName,
+      TableName: tableName,
       Item: {
         shard_id: {S: schedule.shardId},
         date_token: {S: schedule.dateToken},
@@ -34,7 +37,7 @@ class DynamoDBService {
 
   makeOverdueJobsQueryCommand(partition, timestamp, jobStatus){
     const input = {
-      TableName: this.TableName,
+      TableName: this.tableName,
       KeyConditionExpression: 'shard_id = :shardId and date_token < :dateToken',
       FilterExpression: 'job_status = :jobStatus',
       ExpressionAttributeValues: {
@@ -49,7 +52,7 @@ class DynamoDBService {
 
   makeUpdateItemCommand(schedule, oldStatus, newStatus){
     const updateItemRequest = {
-      TableName: this.TableName,
+      TableName: this.tableName,
       Key: {
         shard_id: {S: schedule.shardId},
         date_token: {S: schedule.dateToken}
@@ -67,7 +70,7 @@ class DynamoDBService {
 
   makeDeleteItemCommand(schedule){
     const deleteItemRequest = {
-      TableName: this.TableName,
+      TableName: this.tableName,
       Key: {
         shard_id: {S: schedule.shardId},
         date_token: {S: schedule.dateToken}
@@ -89,14 +92,14 @@ class DynamoDBService {
   }
 
   // 임시 - 테스트를 위한 random item put
-  async addJob(){
+  async addJob(tableName){
     const sampleSchedule = new Schedule(
       getRandomInt(this.maxShardId),
       `${Date.now()}#${uuidv4()}`,
       'SCHEDULED',
       makeSampleJobPayload()
     )
-    const command = this.makePutItemCommand(sampleSchedule);
+    const command = this.makePutItemCommand(tableName, sampleSchedule);
     return this.client
     .send(command)
     .then(()=>sampleSchedule);
@@ -129,6 +132,45 @@ class DynamoDBService {
     const command = this.makeDeleteItemCommand(schedule)
     return this.client
     .send(command)
+  }
+
+  async isTableExists(tableName){
+    const command = new ListTablesCommand({})
+    const response = await this.client.send(command)
+    return response['TableNames'].includes(tableName)
+  }
+
+  async deleteTable(tableName){
+    const command = new DeleteTableCommand({TableName: tableName})
+    return this.client.send(command)
+  }
+
+  async createTable(tableName){
+    const command = new CreateTableCommand({
+      TableName: tableName,
+      AttributeDefinitions: [
+        {
+          AttributeName: 'shard_id',
+          AttributeType: 'S'
+        },
+        {
+          AttributeName: 'date_token',
+          AttributeType: 'S'
+        }
+      ],
+      KeySchema: [
+        {
+          AttributeName: 'shard_id',
+          KeyType: 'HASH'
+        },
+        {
+          AttributeName: 'date_token',
+          KeyType: 'RANGE'
+        }
+      ],
+      BillingMode: 'PAY_PER_REQUEST'
+    })
+    return this.client.send(command)
   }
 }
 

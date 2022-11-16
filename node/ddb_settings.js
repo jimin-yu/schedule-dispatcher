@@ -1,17 +1,22 @@
 import DynamoDBService from "./services/dynamodb_service.js";
 
-const ddbService = DynamoDBService()
+const ddbService = new DynamoDBService()
 
-function createSampleSchedules(itemCount){
+function createSampleSchedules(tableName, itemCount){
   Array(itemCount)
   .fill(0)
-  .forEach(async ()=>await ddbService.addJob())
+  .forEach(async ()=>await ddbService.addJob(tableName))
 }
 
+async function clearTableAndSeed(tableName, itemCount){
+  if (await ddbService.isTableExists(tableName)){
+    await ddbService.deleteTable(tableName)
+  }
+  await ddbService.createTable(tableName)
+  createSampleSchedules(tableName, itemCount)
+}
 
-// clear table
+clearTableAndSeed('deali_schedules', 50)
 
 
-// create sample schedules
-createSampleSchedules(50)
 
