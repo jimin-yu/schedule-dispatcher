@@ -83,16 +83,21 @@ class DynamoDBService:
       )
 
 
-
 async def test():
+  ddb_service = DynamoDBService()
+  item_count = 50
+  async with asyncio.TaskGroup() as tg:
+    for i in range(item_count):
+      tg.create_task(ddb_service.add_job())
   # schedule = make_sample_schedule(5)
   # schedule.job_status = 'ACQUIRED'
   # print(str(schedule))
-  ddb_service = DynamoDBService()
+
+
   # await ddb_service.add_job()
-  result = await ddb_service.get_overdue_jobs(4)
-  schedule = result.schedules[0]
-  await ddb_service.delete_dispatched_job(schedule)
+  # result = await ddb_service.get_overdue_jobs(4)
+  # schedule = result.schedules[0]
+  # await ddb_service.delete_dispatched_job(schedule)
 
 
 if __name__ == "__main__":
