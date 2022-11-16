@@ -46,7 +46,7 @@ class DynamoDBService:
         response['Count'] == self.query_limit or 'LastEvaluatedKey' in response
       )
 
-  async def update_status(self, schedule, old_status, new_status):
+  async def update_status(self, schedule: Schedule, old_status: str, new_status: str) -> Schedule:
     async with self._get_dynamodb_session() as ddb_client:
       table = await ddb_client.Table(self.table_name)
 
@@ -60,22 +60,39 @@ class DynamoDBService:
         ExpressionAttributeValues={
           ':oldStatus': old_status,
           ':newStatus': new_status
+        },
+        ReturnValues='UPDATED_NEW'
+      )
+      updated_status = response['Attributes']['job_status']
+      schedule.job_status = updated_status
+      return schedule
+
+  async def delete_dispatched_job(self, schedule: Schedule) -> None:
+    async with self._get_dynamodb_session() as ddb_client:
+      table = await ddb_client.Table(self.table_name)
+      
+      await table.delete_item(
+        Key={
+          'shard_id': str(schedule.shard_id), 
+          'date_token': schedule.date_token
+        },
+        ConditionExpression='job_status = :acquired',
+        ExpressionAttributeValues={
+          ':acquired': 'ACQUIRED'
         }
       )
-      print(response)
-
-  async def delete_dispatched_job(self, schedulde):
-    pass
-
-
 
 
 
 async def test():
+  # schedule = make_sample_schedule(5)
+  # schedule.job_status = 'ACQUIRED'
+  # print(str(schedule))
   ddb_service = DynamoDBService()
-  result = await ddb_service.get_overdue_jobs(8)
+  # await ddb_service.add_job()
+  result = await ddb_service.get_overdue_jobs(4)
   schedule = result.schedules[0]
-  await ddb_service.update_status(schedule, 'SCHEDULED', 'ACQUIRED')
+  await ddb_service.delete_dispatched_job(schedule)
 
 
 if __name__ == "__main__":
