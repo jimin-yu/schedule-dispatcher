@@ -16,7 +16,10 @@ class Worker:
     now = time.time() * 1000
     for partition in partitions:
       self.scan_times[partition] = now
-    await self.scan_group(partitions)
+
+    async with self.ddb_service.ddb_client as ddb_client:
+      self.table = await ddb_client.Table(self.ddb_service.table_name)
+      await self.scan_group(partitions)
   
   async def scan_group(self, partitions):
     start = time.time() * 1000
@@ -31,8 +34,8 @@ class Worker:
         self.scan_times[partition] = next_scan
         no_delay = no_delay or schedule_immediate
       else:
-        no_delay = True
-    self.metrics.scan_group(time.time()*1000, partitions, no_delay)
+        no_delay = False
+    self.metrics.scan_group(time.time()*1000-start, partitions, no_delay)
 
     # next scan
     if not no_delay:
@@ -45,7 +48,7 @@ class Worker:
   async def dispatch_overdue(self, partition) -> bool:
     start = time.time() * 1000
     try:
-      schedule_query_response = await self.ddb_service.get_overdue_jobs(partition)
+      schedule_query_response = await self.ddb_service.get_overdue_jobs(self.table, partition)
       schedules = schedule_query_response.schedules
       async with asyncio.TaskGroup() as tg:
         for schedule in schedules:
@@ -59,7 +62,7 @@ class Worker:
 
 
   async def after_dispatch(self, schedule):
-    schedule = await self.ddb_service.update_status(schedule, 'SCHEDULED', 'ACQUIRED')
+    schedule = await self.ddb_service.update_status(self.table, schedule, 'SCHEDULED', 'ACQUIRED')
     await self.dispatch_to_destination(schedule)
 
 
@@ -71,7 +74,7 @@ JOB: {schedule.job_spec['jobClass']}
 PARAMS: {schedule.job_spec['jobParams']}
 '''
     print(message)
-    await self.ddb_service.delete_dispatched_job(schedule)
+    await self.ddb_service.delete_dispatched_job(self.table, schedule)
 
 
 async def test():
