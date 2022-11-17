@@ -6,20 +6,21 @@ import time
 
 
 class Worker:
-  def __init__(self):
-    self.metrics = Metrics()
-    self.ddb_service = DynamoDBService()
+  def __init__(self, partitions):
+    self.partitions = partitions
+    self.metrics = Metrics(time.time()*1000, partitions)
+    self.ddb_service = DynamoDBService(self.metrics)
     self.scan_times = dict()
   
-  async def start(self, partitions):
+  async def start(self):
     # sys.setrecursionlimit(10000)
     now = time.time() * 1000
-    for partition in partitions:
+    for partition in self.partitions:
       self.scan_times[partition] = now
 
     async with self.ddb_service.ddb_client as ddb_client:
       self.table = await ddb_client.Table(self.ddb_service.table_name)
-      await self.scan_group(partitions)
+      await self.scan_group(self.partitions)
   
   async def scan_group(self, partitions):
     start = time.time() * 1000

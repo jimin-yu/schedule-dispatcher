@@ -8,8 +8,8 @@ import aioboto3
 from boto3.dynamodb.conditions import Key
 
 class DynamoDBService:
-  def __init__(self):
-    self.metrics = Metrics()
+  def __init__(self, metrics):
+    self.metrics = metrics
     self.shard_number = 10
     self.query_limit = 5
     self.table_name = 'deali_schedules'
