@@ -1,3 +1,4 @@
+# aioboto3
 from utils import *
 from common import Schedule, ScheduleQueryResponse
 from metrics import Metrics
@@ -38,13 +39,14 @@ class DynamoDBService:
     async with self._get_dynamodb_session() as ddb_client:
       table = await ddb_client.Table(self.table_name)
 
+      self.metrics.opening_session(time.time()*1000 - start)
       response = await table.query(
         KeyConditionExpression=Key('shard_id').eq(str(partition)) & Key('date_token').lt(now),
         FilterExpression=Key('job_status').eq('SCHEDULED'),
         Limit=self.query_limit
       )
-
       self.metrics.get_overdue_jobs(time.time() * 1000 - start, partition)
+
       return ScheduleQueryResponse(
         [Schedule.decode_to_schedule(ddb_item) for ddb_item in response['Items']],
         response['Count'] == self.query_limit or 'LastEvaluatedKey' in response
