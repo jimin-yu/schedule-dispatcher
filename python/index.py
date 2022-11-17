@@ -1,12 +1,10 @@
 
-from dynamodb_service import DynamoDBService
+from worker import Worker
 import asyncio
 
-ddb_service = DynamoDBService()
-loop = asyncio.get_event_loop()
-loop.run_until_complete(ddb_service.add_job())
+async def main():
+  worker = Worker()
+  await worker.start([1,2,3,4,5,6,7,8])
 
-# def main():
-#   print("entry point")
-
-# main()
+asyncio.run(main())
+  

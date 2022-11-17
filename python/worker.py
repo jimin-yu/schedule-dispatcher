@@ -1,13 +1,13 @@
 from utils import *
 import asyncio
-import sys
-
+from metrics import Metrics
 from dynamodb_service import DynamoDBService
 import time
 
 
 class Worker:
   def __init__(self):
+    self.metrics = Metrics()
     self.ddb_service = DynamoDBService()
     self.scan_times = dict()
   
@@ -19,6 +19,7 @@ class Worker:
     await self.scan_group(partitions)
   
   async def scan_group(self, partitions):
+    start = time.time() * 1000
     no_delay = False
     
     # iterate partitions
@@ -31,7 +32,8 @@ class Worker:
         no_delay = no_delay or schedule_immediate
       else:
         no_delay = True
-    
+    self.metrics.scan_group(time.time()*1000, partitions, no_delay)
+
     # next scan
     if not no_delay:
       await asyncio.sleep(1)
@@ -41,6 +43,7 @@ class Worker:
 
     
   async def dispatch_overdue(self, partition) -> bool:
+    start = time.time() * 1000
     try:
       schedule_query_response = await self.ddb_service.get_overdue_jobs(partition)
       schedules = schedule_query_response.schedules
@@ -48,6 +51,7 @@ class Worker:
         for schedule in schedules:
           tg.create_task(self.after_dispatch(schedule))
       print(f'fetch done from partition {partition}')
+      self.metrics.dispatch_overdue(time.time()*1000-start, partition, len(schedules))
       return schedule_query_response.should_immediately_query_again
     except Exception as err:
       print(err)

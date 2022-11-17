@@ -1,5 +1,6 @@
 from utils import *
 from common import Schedule, ScheduleQueryResponse
+from metrics import Metrics
 import json
 import asyncio
 import aioboto3
@@ -7,9 +8,10 @@ from boto3.dynamodb.conditions import Key
 
 class DynamoDBService:
   def __init__(self):
+    self.metrics = Metrics()
     self.shard_number = 10
     self.query_limit = 5
-    self.table_name = 'deali_schedules_python'
+    self.table_name = 'deali_schedules'
   
   def _get_dynamodb_session(self):
     session = aioboto3.Session()
@@ -31,7 +33,8 @@ class DynamoDBService:
       )
 
   async def get_overdue_jobs(self, partition: int) -> ScheduleQueryResponse:
-    now = str(time.time() * 1000)
+    start = time.time() * 1000
+    now = str(start)
     async with self._get_dynamodb_session() as ddb_client:
       table = await ddb_client.Table(self.table_name)
 
@@ -40,7 +43,8 @@ class DynamoDBService:
         FilterExpression=Key('job_status').eq('SCHEDULED'),
         Limit=self.query_limit
       )
-    
+
+      self.metrics.get_overdue_jobs(time.time() * 1000 - start, partition)
       return ScheduleQueryResponse(
         [Schedule.decode_to_schedule(ddb_item) for ddb_item in response['Items']],
         response['Count'] == self.query_limit or 'LastEvaluatedKey' in response
