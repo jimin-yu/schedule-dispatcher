@@ -2,8 +2,9 @@ import DynamoDBService from "../services/dynamodb_service.js"
 import Metrics from "../common/metrics.js";
 
 class Worker{
-  constructor(){
-    this.metrics = new Metrics
+  constructor(partitions){
+    this.partitions = partitions
+    this.metrics = new Metrics(Date.now(), partitions)
     this.ddbService = new DynamoDBService(this.metrics);
     this.scanTimes = new Map;
   }
@@ -45,11 +46,11 @@ class Worker{
     })
   }
 
-  async scanGroup(partitions){
+  async scanGroup(){
     const start = Date.now()
     let noDelay = false;
 
-    for(const partition of partitions){
+    for(const partition of this.partitions){
       const now = Date.now()
 
       if(this.scanTimes.get(partition) <= now){
@@ -62,26 +63,26 @@ class Worker{
         })
         noDelay = noDelay || thisNoDelay
       }else{
-        noDelay = true;
+        noDelay = false;
       }
     }
     // TODO : post PartitionWorkerIterationEvent event
-    this.metrics.scanGroup(Date.now()-start, partitions, noDelay)
+    this.metrics.scanGroup(Date.now()-start, this.partitions, noDelay)
     if(noDelay){
       // this.scanGroup(partitions) => stack overflow...
-      setTimeout(()=>this.scanGroup(partitions), 0)
+      setTimeout(()=>this.scanGroup(), 0)
     }else{
-      setTimeout(()=>this.scanGroup(partitions), 1000)
+      setTimeout(()=>this.scanGroup(), 1000)
     }
   }
 
   // start worker thread (entry point)
-  start(partitions){
+  start(){
     const currentTimestamp = Date.now()
-    partitions.forEach(partition=>{
+    this.partitions.forEach(partition=>{
       this.scanTimes.set(partition, currentTimestamp)
     })
-    this.scanGroup(partitions)
+    this.scanGroup()
   }
 }
 
