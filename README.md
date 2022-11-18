@@ -32,5 +32,10 @@ pip install -r requirements.txt
 python3 index.py
 ```
 
+golang
+```
+go mod init <module name>
+```
+
 metric 측정
 ----------
