@@ -44,7 +44,7 @@ func connectDynamo() *dynamodb.DynamoDB {
 	return svc
 }
 
-func overdueQueryExpression(partition int, timestamp int64, jobStatus string) expression.Expression {
+func makeOverdueQueryExpression(partition int, timestamp int64, jobStatus string) *dynamodb.QueryInput {
 	keyCond1 := expression.Key("shard_id").Equal(expression.Value(strconv.Itoa(partition)))
 	keyCond2 := expression.Key("date_token").LessThan(expression.Value(strconv.FormatInt(timestamp, 10)))
 	filt := expression.Name("job_status").Equal(expression.Value(jobStatus))
@@ -52,7 +52,16 @@ func overdueQueryExpression(partition int, timestamp int64, jobStatus string) ex
 		WithKeyCondition(keyCond1.And(keyCond2)).
 		WithFilter(filt).
 		Build()
-	return expr
+
+	input := &dynamodb.QueryInput{
+		TableName:                 aws.String(TABLE_NAME),
+		KeyConditionExpression:    expr.KeyCondition(),
+		FilterExpression:          expr.Filter(),
+		ExpressionAttributeNames:  expr.Names(),
+		ExpressionAttributeValues: expr.Values(),
+		Limit:                     aws.Int64(QUERY_LIMIT),
+	}
+	return input
 }
 
 func makeUpdateItemInput(schedule Schedule, oldStatus string, newStatus string) *dynamodb.UpdateItemInput {
@@ -80,15 +89,8 @@ func makeUpdateItemInput(schedule Schedule, oldStatus string, newStatus string) 
 }
 
 func GetOverdueJobs(partition int, timestamp int64, jobStatus string) ScheduleQueryResponse {
-	expr := overdueQueryExpression(partition, timestamp, jobStatus)
-	res, err := dynamo.Query(&dynamodb.QueryInput{
-		TableName:                 aws.String(TABLE_NAME),
-		KeyConditionExpression:    expr.KeyCondition(),
-		FilterExpression:          expr.Filter(),
-		ExpressionAttributeNames:  expr.Names(),
-		ExpressionAttributeValues: expr.Values(),
-		Limit:                     aws.Int64(QUERY_LIMIT),
-	})
+	input := makeOverdueQueryExpression(partition, timestamp, jobStatus)
+	res, err := dynamo.Query(input)
 	if err != nil {
 		fmt.Println(err)
 	}
