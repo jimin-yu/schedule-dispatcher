@@ -79,8 +79,7 @@ PARAMS: {schedule.job_spec['jobParams']}
 
 
 async def test():
-  worker = Worker()
-  await worker.start([1,2,3,4,5,6,7,8])
+  await Worker([1,2,3,4,5,6,7,8]).start()
 
 
 if __name__ == "__main__":
