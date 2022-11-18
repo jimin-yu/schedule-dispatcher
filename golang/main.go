@@ -8,6 +8,9 @@ import (
 
 func main() {
 	now := time.Now().UnixMilli()
-	queryresult := ddbsvc.GetOverdueJobs(9, now, "SCHEDULED")
-	fmt.Println(queryresult.ShouldImmediatelyQueryAgian)
+	queryresult := ddbsvc.GetOverdueJobs(0, now, "SCHEDULED")
+	schedule := queryresult.Schedules[0]
+	fmt.Println(schedule)
+	schedule = ddbsvc.UpdateStatus(schedule, "SCHEDULED", "ACQUIRED")
+	fmt.Println(schedule)
 }

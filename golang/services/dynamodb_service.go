@@ -28,13 +28,12 @@ type Schedule struct {
 	JobSpec   string `json:"job_spec"`
 }
 
-// func decodeSchedule(ddbItem map[string]*dynamodb.AttributeValue) {
-// 	dynamo.Handlers.UnmarshalMeta.Swap(ddbItem)
-// 	shard_id := ddbItem.S
-// 	fmt.Println(shard_id)
-
-// 	// return schedule{shardId: shard_id}
-// }
+// These init() functions can be used within a package block
+// and regardless of how many times that package is imported,
+// the init() function will only be called once.
+func init() {
+	dynamo = connectDynamo()
+}
 
 func connectDynamo() *dynamodb.DynamoDB {
 	sess := session.Must(session.NewSession(&aws.Config{
@@ -54,6 +53,30 @@ func overdueQueryExpression(partition int, timestamp int64, jobStatus string) ex
 		WithFilter(filt).
 		Build()
 	return expr
+}
+
+func makeUpdateItemInput(schedule Schedule, oldStatus string, newStatus string) *dynamodb.UpdateItemInput {
+	update := expression.Set(expression.Name("job_status"), expression.Value(newStatus))
+	cond := expression.Name("job_status").Equal(expression.Value(oldStatus))
+	expr, _ := expression.NewBuilder().WithCondition(cond).WithUpdate(update).Build()
+
+	input := &dynamodb.UpdateItemInput{
+		TableName: aws.String(TABLE_NAME),
+		Key: map[string]*dynamodb.AttributeValue{
+			"shard_id": {
+				S: aws.String(schedule.ShardId),
+			},
+			"date_token": {
+				S: aws.String(schedule.DateToken),
+			},
+		},
+		ConditionExpression:       expr.Condition(),
+		ExpressionAttributeNames:  expr.Names(),
+		ExpressionAttributeValues: expr.Values(),
+		UpdateExpression:          expr.Update(),
+		ReturnValues:              aws.String("ALL_NEW"),
+	}
+	return input
 }
 
 func GetOverdueJobs(partition int, timestamp int64, jobStatus string) ScheduleQueryResponse {
@@ -78,9 +101,12 @@ func GetOverdueJobs(partition int, timestamp int64, jobStatus string) ScheduleQu
 	}
 }
 
-// These init() functions can be used within a package block
-// and regardless of how many times that package is imported,
-// the init() function will only be called once.
-func init() {
-	dynamo = connectDynamo()
+func UpdateStatus(schedule Schedule, oldStatus string, newStatus string) Schedule {
+	input := makeUpdateItemInput(schedule, oldStatus, newStatus)
+	res, err := dynamo.UpdateItem(input)
+	if err != nil {
+		fmt.Println(err)
+	}
+	dynamodbattribute.UnmarshalMap(res.Attributes, &schedule)
+	return schedule
 }
