@@ -3,6 +3,7 @@ package ddbsvc
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -32,6 +33,7 @@ type Schedule struct {
 // and regardless of how many times that package is imported,
 // the init() function will only be called once.
 func init() {
+	fmt.Println("!!!! init ddb service !!!!!")
 	dynamo = connectDynamo()
 }
 
@@ -88,8 +90,29 @@ func makeUpdateItemInput(schedule Schedule, oldStatus string, newStatus string) 
 	return input
 }
 
-func GetOverdueJobs(partition int, timestamp int64, jobStatus string) ScheduleQueryResponse {
-	input := makeOverdueQueryExpression(partition, timestamp, jobStatus)
+func makeDeleteItemInput(schedule Schedule) *dynamodb.DeleteItemInput {
+	cond := expression.Name("job_status").Equal(expression.Value("ACQUIRED"))
+	expr, _ := expression.NewBuilder().WithCondition(cond).Build()
+	input := &dynamodb.DeleteItemInput{
+		TableName: aws.String(TABLE_NAME),
+		Key: map[string]*dynamodb.AttributeValue{
+			"shard_id": {
+				S: aws.String(schedule.ShardId),
+			},
+			"date_token": {
+				S: aws.String(schedule.DateToken),
+			},
+		},
+		ExpressionAttributeNames:  expr.Names(),
+		ExpressionAttributeValues: expr.Values(),
+		ConditionExpression:       expr.Condition(),
+	}
+	return input
+}
+
+func GetOverdueJobs(partition int) ScheduleQueryResponse {
+	now := time.Now().UnixMilli()
+	input := makeOverdueQueryExpression(partition, now, "SCHEDULED")
 	res, err := dynamo.Query(input)
 	if err != nil {
 		fmt.Println(err)
@@ -111,4 +134,12 @@ func UpdateStatus(schedule Schedule, oldStatus string, newStatus string) Schedul
 	}
 	dynamodbattribute.UnmarshalMap(res.Attributes, &schedule)
 	return schedule
+}
+
+func DeleteDispatchedJob(schedule Schedule) {
+	input := makeDeleteItemInput(schedule)
+	_, err := dynamo.DeleteItem(input)
+	if err != nil {
+		fmt.Println(err)
+	}
 }

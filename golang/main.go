@@ -2,15 +2,10 @@ package main
 
 import (
 	"fmt"
-	ddbsvc "job-dispatcher-golang/services"
-	"time"
+	worker "job-dispatcher-golang/worker"
 )
 
 func main() {
-	now := time.Now().UnixMilli()
-	queryresult := ddbsvc.GetOverdueJobs(0, now, "SCHEDULED")
-	schedule := queryresult.Schedules[0]
-	fmt.Println(schedule)
-	schedule = ddbsvc.UpdateStatus(schedule, "SCHEDULED", "ACQUIRED")
-	fmt.Println(schedule)
+	shouldImmediatelyQueryAgain := worker.DispatchOverdue(3)
+	fmt.Println(shouldImmediatelyQueryAgain)
 }
