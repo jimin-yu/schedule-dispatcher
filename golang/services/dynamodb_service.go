@@ -103,9 +103,9 @@ func makeDeleteItemInput(schedule Schedule) *dynamodb.DeleteItemInput {
 				S: aws.String(schedule.DateToken),
 			},
 		},
+		ConditionExpression:       expr.Condition(),
 		ExpressionAttributeNames:  expr.Names(),
 		ExpressionAttributeValues: expr.Values(),
-		ConditionExpression:       expr.Condition(),
 	}
 	return input
 }
@@ -131,6 +131,8 @@ func UpdateStatus(schedule Schedule, oldStatus string, newStatus string) Schedul
 	res, err := dynamo.UpdateItem(input)
 	if err != nil {
 		fmt.Println(err)
+		fmt.Println(schedule.DateToken)
+		panic("update failed!!!!!!!!!!!!!!")
 	}
 	dynamodbattribute.UnmarshalMap(res.Attributes, &schedule)
 	return schedule
