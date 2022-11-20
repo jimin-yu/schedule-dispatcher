@@ -131,3 +131,8 @@ loop:
 		}
 	}
 }
+
+// main.go에서
+// func main() {
+// 	worker.ScanGroup()
+// }
