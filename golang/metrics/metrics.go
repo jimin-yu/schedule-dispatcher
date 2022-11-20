@@ -25,6 +25,7 @@ func init() {
 	}
 	EMPTY = false
 	startTime = time.Now()
+	fmt.Printf("== %s ==", yellow(startTime))
 }
 
 func GetOverdueJobs(elapsedTime time.Duration, partition int) {
@@ -39,17 +40,17 @@ func DispatchOverdue(elapsedTime time.Duration, partition int, count int) {
 }
 
 func ScanGroup(elapsedTime time.Duration, partitions []int, scanImmediately bool) {
-	fmt.Printf("[%s] %s : iterate all %d partitions once. start next scan immediately = %t\n", yellow("ScanGroup"), stopwatch(elapsedTime), len(partitions), scanImmediately)
+	fmt.Printf("[%s] %s : iterate all %d partitions once. start next scan immediately = %t\n", magenta("ScanGroup"), stopwatch(elapsedTime), len(partitions), scanImmediately)
 }
 
 func tableEmpty(partition int) {
 	partitionEmpty[partition] = true
 	allEmpty := true
 	for _, partition := range PARTITIONS {
-		allEmpty = allEmpty || partitionEmpty[partition]
+		allEmpty = allEmpty && partitionEmpty[partition]
 	}
 	if allEmpty {
 		EMPTY = true
-		fmt.Printf("[%s] %s : table is empty\n", magenta("TableEmpty"), stopwatch(time.Since(startTime)))
+		fmt.Printf("[%s] %s : table is empty\n", yellow("TableEmpty"), stopwatch(time.Since(startTime)))
 	}
 }
