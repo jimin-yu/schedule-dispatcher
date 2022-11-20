@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"job-dispatcher-golang/metrics"
 	ddbsvc "job-dispatcher-golang/services"
 	"os"
 	"os/signal"
@@ -27,6 +28,7 @@ func DispatchToDestination(schedule Schedule) {
 }
 
 func DispatchOverdue(partition int) bool {
+	start := time.Now()
 	queryResult := ddbsvc.GetOverdueJobs(partition)
 	scheduleCount := len(queryResult.Schedules)
 	done := make(chan bool, scheduleCount)
@@ -40,6 +42,7 @@ func DispatchOverdue(partition int) bool {
 	for i := 1; i <= scheduleCount; i++ {
 		<-done
 	}
+	metrics.DispatchOverdue(time.Since(start), partition, scheduleCount)
 	return queryResult.ShouldImmediatelyQueryAgian
 }
 
@@ -54,6 +57,7 @@ loop:
 		select {
 		case <-ticker.C:
 			ticker.Stop()
+			start := time.Now()
 			fmt.Println("start scanning....")
 			noDelay := false
 			for _, partition := range PARTITIONS {
@@ -73,6 +77,7 @@ loop:
 				}
 			}
 
+			metrics.ScanGroup(time.Since(start), PARTITIONS, noDelay)
 			var interval time.Duration
 			if noDelay {
 				interval = time.Millisecond

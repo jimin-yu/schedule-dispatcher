@@ -1,8 +1,6 @@
 package main
 
-import (
-	"job-dispatcher-golang/worker"
-)
+import "job-dispatcher-golang/worker"
 
 func main() {
 	// shouldImmediatelyQueryAgain := worker.DispatchOverdue(3)

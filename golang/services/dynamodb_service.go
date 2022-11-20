@@ -2,6 +2,7 @@ package ddbsvc
 
 import (
 	"fmt"
+	"job-dispatcher-golang/metrics"
 	"strconv"
 	"time"
 
@@ -111,7 +112,8 @@ func makeDeleteItemInput(schedule Schedule) *dynamodb.DeleteItemInput {
 }
 
 func GetOverdueJobs(partition int) ScheduleQueryResponse {
-	now := time.Now().UnixMilli()
+	start := time.Now()
+	now := start.UnixMilli()
 	input := makeOverdueQueryExpression(partition, now, "SCHEDULED")
 	res, err := dynamo.Query(input)
 	if err != nil {
@@ -120,6 +122,7 @@ func GetOverdueJobs(partition int) ScheduleQueryResponse {
 
 	var schedules []Schedule
 	dynamodbattribute.UnmarshalListOfMaps(res.Items, &schedules)
+	metrics.GetOverdueJobs(time.Since(start), partition)
 	return ScheduleQueryResponse{
 		Schedules:                   schedules,
 		ShouldImmediatelyQueryAgian: *res.Count == QUERY_LIMIT || res.LastEvaluatedKey != nil,

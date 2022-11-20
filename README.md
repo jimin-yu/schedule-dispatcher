@@ -34,7 +34,9 @@ python3 index.py
 
 golang
 ```
-go mod init <module name>
+go mod tidy
+
+go run main.go
 ```
 
 metric 측정
