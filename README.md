@@ -39,6 +39,13 @@ go mod tidy
 go run main.go
 ```
 
+ruby
+```
+bundle install
+
+ruby index.rb
+```
+
 metric 측정
 ----------
 동일한 worker 로직으로 item 1000개, 파티션 10개. 최초로 table Empty가 될 때까지 걸린 시간 측정 (초단위)
@@ -93,10 +100,10 @@ IO-bound 작업에서 성능상 유의미한 차이는 없는 것 같다...
 
 
 ### Ruby
-순차실행
+순차실행 : 약 20초
 ![ruby 순차실행](images/ruby-seq.png)
 
-concurrent 실행
+concurrent 실행 : 14.1초
 ![ruby future로 실행](images/ruby-fut.png)
 
 
