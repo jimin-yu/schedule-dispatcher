@@ -2,6 +2,8 @@ require_relative './dynamodb_service'
 require_relative './metrics'
 
 class Worker
+  include Concurrent::Promises::FactoryMethods
+
   def initialize(partitions)
     @metrics = Metrics.new(partitions)
     @partitions = partitions
@@ -13,6 +15,7 @@ class Worker
     end
   end
 
+  # return value : future<nil>
   def dispatch_to_destination(schedule)
     msg = 
     puts "== PUSH JOB TO DESTINATION QUEUE =="
@@ -23,15 +26,21 @@ class Worker
     @ddbsvc.delete_dispatched_jobs(schedule)
   end
 
+  # return value : future<bool>
   def dispatch_overdue(partition)
     start = Time.now
-    query_result = @ddbsvc.get_overdue_jobs(partition)
-    query_result[:schedules].each do |schedule|
-      schedule = @ddbsvc.update_status(schedule, 'SCHEDULED', 'ACQUIRED')
-      dispatch_to_destination(schedule)
+    done = resolvable_future
+    @ddbsvc.get_overdue_jobs(partition)
+    .then (done) do |query_result, done|
+      tasks = query_result[:schedules].map do |schedule|
+        @ddbsvc.update_status(schedule, 'SCHEDULED', 'ACQUIRED')
+        .then {|schedule| dispatch_to_destination(schedule)}
+      end
+      zip(*tasks).value!
+      @metrics.dispatch_overdue(Time.now-start, partition, query_result[:schedules].count)
+      done.fulfill query_result[:should_immediately_query_again]
     end
-    @metrics.dispatch_overdue(Time.now-start, partition, query_result[:schedules].count)
-    query_result[:should_immediately_query_again]
+    return done
   end
 
   def scan_group
@@ -42,8 +51,11 @@ class Worker
       now = Time.now
       if @scan_times[partition] <= now
         this_no_delay = dispatch_overdue(partition)
-        next_scan = this_no_delay ? Time.now : Time.now + 1
-        @scan_times[partition] = next_scan
+        .then do |scanImmediate|
+          next_scan = scanImmediate ? Time.now : Time.now + 1
+          @scan_times[partition] = next_scan
+          scanImmediate
+        end.value!
         no_delay ||= this_no_delay
       else
         no_delay = false

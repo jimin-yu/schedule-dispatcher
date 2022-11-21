@@ -93,9 +93,11 @@ IO-bound 작업에서 성능상 유의미한 차이는 없는 것 같다...
 
 
 ### Ruby
-sequential 버전 => 42초
+순차실행
+![ruby 순차실행](images/ruby-seq.png)
 
-![ruby 순차실행](images/ruby-sequential.png)
-비동기 기능을 하나도 사용하지 않았을 경우 3배 정도 더 오래걸렸다.
+concurrent 실행
+![ruby future로 실행](images/ruby-fut.png)
+
 
 
